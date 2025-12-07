@@ -305,4 +305,29 @@
               href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
 
     </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const serviceField = document.getElementById('service_field');
+            const fieldPrice = document.getElementById('field-price');
+            const fieldDescription = document.getElementById('field-description');
+
+            serviceField.addEventListener('change', function () {
+                const selectedOption = this.options[this.selectedIndex];
+                const price = selectedOption.getAttribute('data-price');
+                const description = selectedOption.getAttribute('data-description');
+
+                if (price) {
+                    fieldPrice.textContent = '₦' + new Intl.NumberFormat('en-NG').format(price);
+                } else {
+                    fieldPrice.textContent = '₦0.00';
+                }
+
+                if (description) {
+                    fieldDescription.textContent = description;
+                } else {
+                    fieldDescription.textContent = '';
+                }
+            });
+        });
+    </script>
 </x-app-layout>

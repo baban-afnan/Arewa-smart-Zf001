@@ -28,9 +28,16 @@ Route::get('/', function () {
 
 Route::post('/palmpay/webhook', [PaymentWebhookController::class, 'handleWebhook']) ->middleware('throttle:60,1');
 
-Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('verified')->name('dashboard');
+// Webhooks (public, validate signature in controller)
+// In routes/api.php
+   
+Route::post('/validations-webhook', [NinValidationController::class, 'webhook'])->name('validations.webhook');
 
-Route::middleware('auth')->group(function () {
+
+Route::middleware(['auth'])->group(function () {
+
+    Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('verified')->name('dashboard');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -41,198 +48,191 @@ Route::middleware('auth')->group(function () {
     Route::post('/profile/additional', [ProfileController::class, 'updateAdditionalInfo'])->name('profile.additional');
     Route::put('/password', [ProfileController::class, 'updatePassword'])->name('password.update');
     Route::post('/profile/pin', [ProfileController::class, 'updatePin'])->name('profile.pin');
+
+
+    Route::prefix('wallet')->group(function () {
+            Route::get('/', [WalletController::class, 'index'])->name('wallet');
+            Route::post('/create-virtual-account', [WalletController::class, 'createWallet'])->name('virtual.account.create');
+            Route::post('/claim-bonus', [WalletController::class, 'claimBonus'])->name('wallet.claimBonus');
+        });
+
+
+    /*
+        |--------------------------------------------------------------------------
+        | Services
+        |--------------------------------------------------------------------------
+        */
+        Route::prefix('services')->group(function () {
+            Route::get('/bvn', [ServicesController::class, 'bvnServices'])->name('bvn.services');
+            Route::get('/vip', [ServicesController::class, 'vipServices'])->name('vip.services');
+            Route::get('/nin', [ServicesController::class, 'ninServices'])->name('nin.services');
+            Route::get('/verification', [ServicesController::class, 'verificationServices'])->name('verification.services');
+            Route::get('/support', [ServicesController::class, 'supportServices'])->name('support.services');
+            Route::get('/settings', [ServicesController::class, 'settingServices'])->name('settings.services');
+            Route::get('/transaction-pin', [ServicesController::class, 'transactionPin'])->name('transaction.pin');
+            Route::get('/airtime', [ServicesController::class, 'airtime'])->name('airtime.index');
+        });
     
-});
+
+    
+        /*
+        |--------------------------------------------------------------------------
+        | Utility bill payment (Airtime & Data)
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('/airtime', [AirtimeController::class, 'airtime'])->name('airtime');
+        Route::post('/buy-airtime', [AirtimeController::class, 'buyAirtime'])->name('buyairtime');
 
 
-Route::prefix('wallet')->group(function () {
-        Route::get('/', [WalletController::class, 'index'])->name('wallet');
-        Route::post('/create-virtual-account', [WalletController::class, 'createWallet'])->name('virtual.account.create');
-        Route::post('/claim-bonus', [WalletController::class, 'claimBonus'])->name('wallet.claimBonus');
-    });
+        Route::get('/data', [DataController::class, 'data'])->name('buy-data');
+        Route::post('/buy-data', [DataController::class, 'buydata'])->name('buydata');
+        Route::get('/fetch-data-bundles', [DataController::class, 'fetchBundles'])->name('fetch.bundles');
+        Route::get('/fetch-data-bundles-price', [DataController::class, 'fetchBundlePrice'])->name('fetch.bundle.price');
+        Route::post('/verify-pin', [DataController::class, 'verifyPin'])->name('verify.pin');
 
 
-    // Webhooks (public, validate signature in controller)
-   // In routes/api.php
-   
-   Route::post('/validations-webhook', [NinValidationController::class, 'webhook'])->name('validations.webhook');
+        Route::get('/sme-data', [DataController::class, 'sme_data'])->name('sme-data');
+        Route::get('/fetch-data-type', [DataController::class, 'fetchDataType']);
+        Route::get('/fetch-data-plan', [DataController::class, 'fetchDataPlan']);
+        Route::get('/fetch-sme-data-bundles-price', [DataController::class, 'fetchSmeBundlePrice']);
+        Route::post('/buy-sme-data', [DataController::class, 'buySMEdata'])->name('buy-sme-data');
+
+        Route::get('/education', [EducationalController::class, 'pin'])->name("education");
+        Route::post('/buy-pin', [EducationalController::class, 'buypin'])->name('buypin');
+        Route::get('/get-variation', [EducationalController::class, 'getVariation'])->name('get-variation');
+
+        Route::get('/jamb', [EducationalController::class, 'jamb'])->name('jamb');
+        Route::post('/verify-jamb', [EducationalController::class, 'verifyJamb'])->name('verify.jamb');
+        Route::post('/buy-jamb', [EducationalController::class, 'buyJamb'])->name('buyjamb');
+
+        Route::get('/electricity', [App\Http\Controllers\Action\ElectricityController::class, 'index'])->name('electricity');
+        Route::post('/verify-electricity', [App\Http\Controllers\Action\ElectricityController::class, 'verifyMeter'])->name('verify.electricity');
+        Route::post('/buy-electricity', [App\Http\Controllers\Action\ElectricityController::class, 'purchase'])->name('buy.electricity');
+
+        Route::get('/cable', [App\Http\Controllers\Action\CableController::class, 'index'])->name('cable');
+        Route::get('/cable/variations', [App\Http\Controllers\Action\CableController::class, 'getVariations'])->name('cable.variations');
+        Route::post('/cable/verify', [App\Http\Controllers\Action\CableController::class, 'verifyIuc'])->name('verify.cable');
+        Route::post('/cable/buy', [App\Http\Controllers\Action\CableController::class, 'purchase'])->name('buy.cable');
+
+        Route::get('/transactions', [App\Http\Controllers\TransactionController::class, 'index'])->name('transactions');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Transfer to Smart User
+        |--------------------------------------------------------------------------
+        */
+        Route::get('/transfer', [App\Http\Controllers\TransferController::class, 'index'])->name('transfer.index');
+        Route::post('/transfer/verify', [App\Http\Controllers\TransferController::class, 'verifyUser'])->name('transfer.verify');
+        Route::post('/transfer/process', [App\Http\Controllers\TransferController::class, 'processTransfer'])->name('transfer.process');
+
+        Route::view('/thankyou', 'thankyou')->name('thankyou');
 
 
- /*
-    |--------------------------------------------------------------------------
-    | Services
-    |--------------------------------------------------------------------------
-    */
-    Route::prefix('services')->group(function () {
-        Route::get('/bvn', [ServicesController::class, 'bvnServices'])->name('bvn.services');
-        Route::get('/vip', [ServicesController::class, 'vipServices'])->name('vip.services');
-        Route::get('/nin', [ServicesController::class, 'ninServices'])->name('nin.services');
-        Route::get('/verification', [ServicesController::class, 'verificationServices'])->name('verification.services');
-        Route::get('/support', [ServicesController::class, 'supportServices'])->name('support.services');
-        Route::get('/settings', [ServicesController::class, 'settingServices'])->name('settings.services');
-        Route::get('/transaction-pin', [ServicesController::class, 'transactionPin'])->name('transaction.pin');
-        Route::get('/airtime', [ServicesController::class, 'airtime'])->name('airtime.index');
-    });
-  
+        /*
+        |--------------------------------------------------------------------------
+        | BVN Services & CRM
+        |--------------------------------------------------------------------------
+        */
+        Route::get('/bvn-crm', [BvnServicesController::class, 'index'])->name('bvn-crm');
+        Route::post('/bvn-crm', [BvnServicesController::class, 'store'])->name('crm.store');
 
-  
-     /*
-    |--------------------------------------------------------------------------
-    | Utility bill payment (Airtime & Data)
-    |--------------------------------------------------------------------------
-    */
+        Route::get('/enrolment-report', [EnrolmentReportController::class, 'index'])->name('enrolment.report');
 
-    Route::get('/airtime', [AirtimeController::class, 'airtime'])->name('airtime');
-    Route::post('/buy-airtime', [AirtimeController::class, 'buyAirtime'])->name('buyairtime');
+        Route::get('/send-vnin', [BvnServicesController::class, 'index'])->name('send-vnin');
+        Route::post('/send-vnin', [BvnServicesController::class, 'store'])->name('send-vnin.store');
 
+        Route::get('/modification-fields/{serviceId}', [BvnModificationController::class, 'getServiceFields'])->name('modification.fields');
+        Route::get('/modification', [BvnModificationController::class, 'index'])->name('modification');
+        Route::post('/modification', [BvnModificationController::class, 'store'])->name('modification.store');
 
-    Route::get('/data', [DataController::class, 'data'])->name('buy-data');
-    Route::post('/buy-data', [DataController::class, 'buydata'])->name('buydata');
-    Route::get('/fetch-data-bundles', [DataController::class, 'fetchBundles'])->name('fetch.bundles');
-    Route::get('/fetch-data-bundles-price', [DataController::class, 'fetchBundlePrice'])->name('fetch.bundle.price');
-    Route::post('/verify-pin', [DataController::class, 'verifyPin'])->name('verify.pin');
+        Route::get('/phone-search', [ManualSearchController::class, 'index'])->name('phone.search.index');
+        Route::post('/phone-search', [ManualSearchController::class, 'store'])->name('phone.search.store');
+        Route::get('/phone-search/{id}/details', [ManualSearchController::class, 'showDetails'])->name('phone.search.details');
 
+        /*
+        |--------------------------------------------------------------------------
+        | Affidavit Services
+        |--------------------------------------------------------------------------
+        */
+        Route::get('/affidavit', [App\Http\Controllers\Agency\AffidavitController::class, 'index'])->name('affidavit.index');
+        Route::post('/affidavit', [App\Http\Controllers\Agency\AffidavitController::class, 'store'])->name('affidavit.store');
 
-    Route::get('/sme-data', [DataController::class, 'sme_data'])->name('sme-data');
-    Route::get('/fetch-data-type', [DataController::class, 'fetchDataType']);
-    Route::get('/fetch-data-plan', [DataController::class, 'fetchDataPlan']);
-    Route::get('/fetch-sme-data-bundles-price', [DataController::class, 'fetchSmeBundlePrice']);
-    Route::post('/buy-sme-data', [DataController::class, 'buySMEdata'])->name('buy-sme-data');
+        /*
+        |--------------------------------------------------------------------------
+        | CAC Registration Services
+        |--------------------------------------------------------------------------
+        */
+        Route::get('/cac-reg', [App\Http\Controllers\Agency\CacRegistrationController::class, 'index'])->name('cac.index');
+        Route::post('/cac-reg', [App\Http\Controllers\Agency\CacRegistrationController::class, 'store'])->name('cac.store');
 
-    Route::get('/education', [EducationalController::class, 'pin'])->name("education");
-    Route::post('/buy-pin', [EducationalController::class, 'buypin'])->name('buypin');
-    Route::get('/get-variation', [EducationalController::class, 'getVariation'])->name('get-variation');
+        /*
+        |--------------------------------------------------------------------------
+        | TIN Registration Services
+        |--------------------------------------------------------------------------
+        */
+        Route::get('/tin-reg', [App\Http\Controllers\Agency\TinRegistrationController::class, 'index'])->name('cac.tin');
+        Route::post('/tin-reg', [App\Http\Controllers\Agency\TinRegistrationController::class, 'store'])->name('tin.store');
 
-    Route::get('/jamb', [EducationalController::class, 'jamb'])->name('jamb');
-    Route::post('/verify-jamb', [EducationalController::class, 'verifyJamb'])->name('verify.jamb');
-    Route::post('/buy-jamb', [EducationalController::class, 'buyJamb'])->name('buyjamb');
+        Route::prefix('bvn')->group(function () {
 
-    Route::get('/electricity', [App\Http\Controllers\Action\ElectricityController::class, 'index'])->name('electricity');
-    Route::post('/verify-electricity', [App\Http\Controllers\Action\ElectricityController::class, 'verifyMeter'])->name('verify.electricity');
-    Route::post('/buy-electricity', [App\Http\Controllers\Action\ElectricityController::class, 'purchase'])->name('buy.electricity');
-
-    Route::get('/cable', [App\Http\Controllers\Action\CableController::class, 'index'])->name('cable');
-    Route::get('/cable/variations', [App\Http\Controllers\Action\CableController::class, 'getVariations'])->name('cable.variations');
-    Route::post('/cable/verify', [App\Http\Controllers\Action\CableController::class, 'verifyIuc'])->name('verify.cable');
-    Route::post('/cable/buy', [App\Http\Controllers\Action\CableController::class, 'purchase'])->name('buy.cable');
-
-    Route::get('/transactions', [App\Http\Controllers\TransactionController::class, 'index'])->name('transactions');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Transfer to Smart User
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/transfer', [App\Http\Controllers\TransferController::class, 'index'])->name('transfer.index');
-    Route::post('/transfer/verify', [App\Http\Controllers\TransferController::class, 'verifyUser'])->name('transfer.verify');
-    Route::post('/transfer/process', [App\Http\Controllers\TransferController::class, 'processTransfer'])->name('transfer.process');
-
-    Route::view('/thankyou', 'thankyou')->name('thankyou');
+        // BVN User route
+        Route::get('/', [BvnUserController::class, 'index'])->name('bvn.index');
+        Route::post('/store', [BvnUserController::class, 'store'])->name('bvn.store');
 
 
-      /*
-    |--------------------------------------------------------------------------
-    | BVN Services & CRM
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/bvn-crm', [BvnServicesController::class, 'index'])->name('bvn-crm');
-    Route::post('/bvn-crm', [BvnServicesController::class, 'store'])->name('crm.store');
+        // nin Modification Routes
+        Route::prefix('nin-modification')->group(function () {
+            Route::get('/', [NinModificationController::class, 'index'])->name('nin-modification');
+            Route::post('/', [NinModificationController::class, 'store'])->name('nin-modification.store');
+        });
 
-    Route::get('/enrolment-report', [EnrolmentReportController::class, 'index'])->name('enrolment.report');
-
-    Route::get('/send-vnin', [BvnServicesController::class, 'index'])->name('send-vnin');
-    Route::post('/send-vnin', [BvnServicesController::class, 'store'])->name('send-vnin.store');
-
-    Route::get('/modification-fields/{serviceId}', [BvnModificationController::class, 'getServiceFields'])->name('modification.fields');
-    Route::get('/modification', [BvnModificationController::class, 'index'])->name('modification');
-    Route::post('/modification', [BvnModificationController::class, 'store'])->name('modification.store');
-
-    Route::get('/phone-search', [ManualSearchController::class, 'index'])->name('phone.search.index');
-    Route::post('/phone-search', [ManualSearchController::class, 'store'])->name('phone.search.store');
-    Route::get('/phone-search/{id}/details', [ManualSearchController::class, 'showDetails'])->name('phone.search.details');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Affidavit Services
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/affidavit', [App\Http\Controllers\Agency\AffidavitController::class, 'index'])->name('affidavit.index');
-    Route::post('/affidavit', [App\Http\Controllers\Agency\AffidavitController::class, 'store'])->name('affidavit.store');
-
-    /*
-    |--------------------------------------------------------------------------
-    | CAC Registration Services
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/cac-reg', [App\Http\Controllers\Agency\CacRegistrationController::class, 'index'])->name('cac.index');
-    Route::post('/cac-reg', [App\Http\Controllers\Agency\CacRegistrationController::class, 'store'])->name('cac.store');
-
-    /*
-    |--------------------------------------------------------------------------
-    | TIN Registration Services
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/tin-reg', [App\Http\Controllers\Agency\TinRegistrationController::class, 'index'])->name('cac.tin');
-    Route::post('/tin-reg', [App\Http\Controllers\Agency\TinRegistrationController::class, 'store'])->name('tin.store');
-
-    Route::prefix('bvn')->middleware(['auth'])->group(function () {
-
-    // BVN User route
-    Route::get('/', [BvnUserController::class, 'index'])->name('bvn.index');
-    Route::post('/store', [BvnUserController::class, 'store'])->name('bvn.store');
+        // NIN Validation & IPE Routes
+        Route::get('/nin-validation', [NinValidationController::class, 'index'])->name('nin-validation');
+        Route::post('/nin-validation', [NinValidationController::class, 'store'])->name('nin-validation.store');
+        Route::get('/nin-validation/check/{id}', [NinValidationController::class, 'checkStatus'])->name('nin-validation.check');
+    
+        // Support Routes
+        Route::prefix('support')->group(function () {
+            Route::get('/', [SupportController::class, 'index'])->name('support.index');
+            Route::get('/create', [SupportController::class, 'create'])->name('support.create');
+            Route::post('/store', [SupportController::class, 'store'])->name('support.store');
+            Route::get('/{ticket}', [SupportController::class, 'show'])->name('support.show');
+            Route::post('/{ticket}/reply', [SupportController::class, 'reply'])->name('support.reply');
+        });
 
 
-    // nin Modification Routes
-    Route::prefix('nin-modification')->group(function () {
-        Route::get('/', [NinModificationController::class, 'index'])->name('nin-modification');
-        Route::post('/', [NinModificationController::class, 'store'])->name('nin-modification.store');
-    });
+        /*
+        |--------------------------------------------------------------------------
+        | NIN Verification
+        |--------------------------------------------------------------------------
+        */
+        Route::prefix('nin-verification')->group(function () {
+            Route::get('/', [NINverificationController::class, 'index'])->name('nin.verification.index');
+            Route::post('/', [NINverificationController::class, 'store'])->name('nin.verification.store');
+            Route::post('/{id}/status', [NINverificationController::class, 'updateStatus'])->name('nin.verification.status');
+            Route::get('/standardSlip/{id}', [NINverificationController::class, 'standardSlip'])->name('standardSlip');
+            Route::get('/premiumSlip/{id}', [NINverificationController::class, 'premiumSlip'])->name('premiumSlip');
+        });
 
-    // NIN Validation & IPE Routes
-    Route::get('/nin-validation', [NinValidationController::class, 'index'])->name('nin-validation');
-    Route::post('/nin-validation', [NinValidationController::class, 'store'])->name('nin-validation.store');
-    Route::get('/nin-validation/check/{id}', [NinValidationController::class, 'checkStatus'])->name('nin-validation.check');
- 
-    // Support Routes
-    Route::prefix('support')->group(function () {
-        Route::get('/', [SupportController::class, 'index'])->name('support.index');
-        Route::get('/create', [SupportController::class, 'create'])->name('support.create');
-        Route::post('/store', [SupportController::class, 'store'])->name('support.store');
-        Route::get('/{ticket}', [SupportController::class, 'show'])->name('support.show');
-        Route::post('/{ticket}/reply', [SupportController::class, 'reply'])->name('support.reply');
-    });
+        /*
+        |--------------------------------------------------------------------------
+        | BVN Verification
+        |--------------------------------------------------------------------------
+        */
+        Route::prefix('bvn-verification')->group(function () {
+            Route::get('/', [BvnverificationController::class, 'index'])->name('bvn.verification.index');
+            Route::post('/', [BvnverificationController::class, 'store'])->name('bvn.verification.store');
+        Route::get('/standardBVN/{id}', [BvnverificationController::class, 'standardBVN'])->name("standardBVN");
+        Route::get('/premiumBVN/{id}', [BvnverificationController::class, 'premiumBVN'])->name("premiumBVN");
+        Route::get('/plasticBVN/{id}', [BvnverificationController::class, 'plasticBVN'])->name("plasticBVN");
 
+        });
 
-     /*
-    |--------------------------------------------------------------------------
-    | NIN Verification
-    |--------------------------------------------------------------------------
-    */
-    Route::prefix('nin-verification')->group(function () {
-        Route::get('/', [NINverificationController::class, 'index'])->name('nin.verification.index');
-        Route::post('/', [NINverificationController::class, 'store'])->name('nin.verification.store');
-        Route::post('/{id}/status', [NINverificationController::class, 'updateStatus'])->name('nin.verification.status');
-        Route::get('/standardSlip/{id}', [NINverificationController::class, 'standardSlip'])->name('standardSlip');
-        Route::get('/premiumSlip/{id}', [NINverificationController::class, 'premiumSlip'])->name('premiumSlip');
-    });
-
-    /*
-    |--------------------------------------------------------------------------
-    | BVN Verification
-    |--------------------------------------------------------------------------
-    */
-    Route::prefix('bvn-verification')->group(function () {
-        Route::get('/', [BvnverificationController::class, 'index'])->name('bvn.verification.index');
-        Route::post('/', [BvnverificationController::class, 'store'])->name('bvn.verification.store');
-       Route::get('/standardBVN/{id}', [BvnverificationController::class, 'standardBVN'])->name("standardBVN");
-    Route::get('/premiumBVN/{id}', [BvnverificationController::class, 'premiumBVN'])->name("premiumBVN");
-    Route::get('/plasticBVN/{id}', [BvnverificationController::class, 'plasticBVN'])->name("plasticBVN");
 
     });
-
 
 });
  
 
 require __DIR__.'/auth.php';
-

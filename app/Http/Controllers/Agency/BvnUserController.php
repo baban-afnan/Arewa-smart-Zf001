@@ -165,6 +165,7 @@ class BvnUserController extends Controller
                 'service_field_id' => $serviceField->id,
                 'service_id' => $serviceField->service_id,
                 'transaction_id' => $transaction->id,
+                'amount' => $servicePrice,
                 'submission_date' => now(),
                 'status' => 'pending',
             ]);

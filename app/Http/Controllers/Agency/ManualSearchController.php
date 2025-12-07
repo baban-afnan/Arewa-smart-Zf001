@@ -148,14 +148,14 @@ class ManualSearchController extends Controller
                 'service_id' => $serviceField->service_id,
                 'field_code' => $serviceField->field_code,
                 'field_name' => $serviceField->field_name,
-                'amount_paid' => $servicePrice,
+                'amount' => $servicePrice,
                 'service_name' => $serviceName,
                 'number' => $validated['number'],
                 'transaction_id' => $transaction->id,
                 'performed_by' => $performedBy,
                 'submission_date' => now(),
                 'status' => 'pending',
-                'service_type' => 'bvn_search',
+                'service_type' => 'BVN_SEARCH',
             ]);
 
             // Deduct from wallet

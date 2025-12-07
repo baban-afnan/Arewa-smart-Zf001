@@ -70,6 +70,7 @@ class AgentService extends Model
         'street_name',
         'country',
         'cac_certificate',
+        'company_type',
     ];
 
     protected $casts = [

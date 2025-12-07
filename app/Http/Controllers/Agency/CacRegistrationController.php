@@ -78,6 +78,7 @@ class CacRegistrationController extends Controller
 
         // Define Base Rules
         $rules = [
+            'business_type' => 'required|string',
             'surname' => 'required|string',
             'first_name' => 'required|string',
             'phone_number' => 'required|string',
@@ -198,24 +199,33 @@ class CacRegistrationController extends Controller
                 'user_id'         => $user->id,
                 'service_id'      => $serviceField->service_id,
                 'service_field_id'=> $serviceField->id,
-                'field_code'      => $serviceField->id, // Redundant but consistent
+                'field_code'      => $serviceField->field_code, 
                 'service_name'    => $serviceName,
                 'field_name'      => $fieldName,
-                'amount_paid'     => $totalAmount,
+                'amount'          => $totalAmount,
                 'performed_by'    => $performedBy,
                 'transaction_id'  => $transaction->id,
                 'submission_date' => now(),
                 'status'          => 'pending',
-                'service_type'    => 'cac_registration',
-                'field'           => json_encode($formData), // Store all form data here
+                'service_type'    => 'CAC',
+                'field'           => json_encode($formData), 
                 'first_name'      => $request->first_name,
                 'last_name'       => $request->surname,
+                'middle_name'     => $request->other_name,
                 'email'           => $request->email,
                 'phone_number'    => $request->phone_number,
-                'passport_url'    => isset($uploads['passport']) ? asset('storage/' . $uploads['passport']) : null, // Migration has 'number' or 'phone_number'? Migration has 'number'.
+                'dob'             => $request->date_of_birth,
+                'gender'          => $request->gender,
+                'passport_url'    => $uploads['passport'] ?? null,
+                'nin_slip_url'    => $uploads['nin'] ?? null,
                 'number'          => $request->phone_number,
                 'state'           => $request->res_state,
                 'lga'             => $request->res_lga,
+                'city'            => $request->res_city,
+                'house_number'    => $request->res_house_no,
+                'street_name'     => $request->res_street,
+                'company_name'    => $request->business_name_1,
+                'company_type'    => $request->business_type,
             ]);
 
             $wallet->decrement('balance', $totalAmount);

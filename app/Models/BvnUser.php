@@ -37,6 +37,7 @@ class BvnUser extends Model
         'query',
         'performed_by',
         'approved_by',
+        'amount',
     ];
 
     public function user()

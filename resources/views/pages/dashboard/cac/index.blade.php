@@ -93,7 +93,22 @@
                                 <div id="business-details-section" class="d-none">
                                     <h6 class="fw-bold text-primary mb-3 border-bottom pb-2">Business Details</h6>
                                     <div class="row g-3 mb-4">
-                                        <div class="col-md-12">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Business Type <span class="text-danger">*</span></label>
+                                            <select name="business_type" class="form-select" required>
+                                                <option value="" disabled selected>Select Business Type</option>
+                                                <option value="incorporated_trustee" {{ old('business_type') == 'incorporated_trustee' ? 'selected' : '' }}>INCORPORATED TRUSTEE LIMITED BY GUARANTEE</option>
+                                                <option value="partnership" {{ old('business_type') == 'partnership' ? 'selected' : '' }}>PARTNERSHIP</option>
+                                                <option value="private_limited" {{ old('business_type') == 'private_limited' ? 'selected' : '' }}>PRIVATE LIMITED COMPANY</option>
+                                                <option value="private_unlimited" {{ old('business_type') == 'private_unlimited' ? 'selected' : '' }}>PRIVATE UNLIMITED COMPANY</option>
+                                                <option value="public_limited" {{ old('business_type') == 'public_limited' ? 'selected' : '' }}>PUBLIC LIMITED COMPANY</option>
+                                                <option value="sole_proprietorship" {{ old('business_type') == 'sole_proprietorship' ? 'selected' : '' }}>SOLE PROPRIETORSHIP</option>
+                                                <option value="business_name" {{ old('business_type') == 'business_name' ? 'selected' : '' }}>BUSINESS NAME</option>
+                                                <option value="llp" {{ old('business_type') == 'llp' ? 'selected' : '' }}>LIMITED LIABILITY PARTNERSHIP</option>
+                                                <option value="limited_partnership" {{ old('business_type') == 'limited_partnership' ? 'selected' : '' }}>LIMITED PARTNERSHIP</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
                                             <label class="form-label">Nature of Business <span class="text-danger">*</span></label>
                                             <input type="text" class="form-control" name="nature_of_business" value="{{ old('nature_of_business') }}" required>
                                         </div>

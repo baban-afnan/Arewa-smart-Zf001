@@ -192,7 +192,7 @@ class AffidavitController extends Controller
                 'user_id'         => $user->id,
                 'service_id'      => $serviceField->service_id,
                 'service_field_id' => $serviceField->id,
-                'field_code'      => $serviceField->id,
+                'field_code'      => $serviceField->field_code,
                 'service_name'    => $serviceName,
                 'field_name'      => $fieldName,
                 'description'     => "Old Details: " . $request->old_details . "\nNew Details: " . $request->new_details,

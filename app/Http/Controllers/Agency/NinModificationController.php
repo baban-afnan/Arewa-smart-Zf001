@@ -173,6 +173,8 @@ class NinModificationController extends Controller
                 'user_id'            => $user->id,
                 'service_field_id'   => $serviceField->id,
                 'service_id'         => $service->id,
+                'field_code'         => $serviceField->field_code,
+                'amount'             => $servicePrice,
                 'service_name'       => $service->name,
                 'service_field_name' => $serviceField->field_name,
                 'nin'                => $validated['nin'],
@@ -181,7 +183,7 @@ class NinModificationController extends Controller
                 'transaction_id'     => $transaction->id,
                 'submission_date'    => now(),
                 'status'             => 'pending',
-                'service_type'       => 'nin_modification',
+                'service_type'       => 'NIN_MODIFICATION',
             ]);
 
             // Debit Wallet

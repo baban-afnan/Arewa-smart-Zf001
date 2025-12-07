@@ -178,11 +178,19 @@
                                     <div class="row g-3 mb-4">
                                         <div class="col-md-6">
                                             <label class="form-label">Surname <span class="text-danger">*</span></label>
-                                            <input type="text" class="form-control corporate-contact" name="last_name" value="{{ old('last_name') }}">
+                                            <input type="text" class="form-control corporate-contact" name="last_name" value="{{ old('last_name') }}" required>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">First Name <span class="text-danger">*</span></label>
-                                            <input type="text" class="form-control corporate-contact" name="first_name" value="{{ old('first_name') }}">
+                                            <input type="text" class="form-control corporate-contact" name="first_name" value="{{ old('first_name') }}" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Contact Person BVN <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control corporate-contact" name="contact_bvn" value="{{ old('contact_bvn') }}" maxlength="11" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Contact Person NIN <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control corporate-contact" name="contact_nin" value="{{ old('contact_nin') }}" maxlength="11" required>
                                         </div>
                                     </div>
                                 </div>

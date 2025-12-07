@@ -290,6 +290,101 @@
     </div>
 
     <!-- Scripts -->
-   
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const bankSelect = document.getElementById('enrolment_bank');
+            const fieldSelect = document.getElementById('service_field');
+            const fieldDescription = document.getElementById('field-description');
+            const fieldPriceDisplay = document.getElementById('field-price'); // Shows modification fee
+            const affidavitSelect = document.getElementById('affidavit');
+            const affidavitUploadWrapper = document.getElementById('affidavit_upload_wrapper');
+            const totalAmountDisplay = document.getElementById('total-amount');
+            const feeBreakdown = document.getElementById('fee-breakdown');
+            const walletBalance = {{ $wallet->balance ?? 0 }};
+
+            let modificationFee = 0;
+            let affidavitFee = 0; // This will trigger only if affidavit is NOT available
+            
+            // Hardcoded affidavit fee for now since controller fetches it dynamically, 
+            // but for UI responsiveness we can estimate or fetch it.
+            // Best practice: Pass it from controller to view.
+            // For now, let's assume standard from logic or fetch via AJAX if possible.
+            // To simplify, let's just use the modification fee dynamics first.
+
+            bankSelect.addEventListener('change', function () {
+                const bankId = this.value;
+                fieldSelect.innerHTML = '<option value="">Loading...</option>';
+                
+                if (bankId) {
+                    fetch(`/bvn/get-service-fields/${bankId}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            fieldSelect.innerHTML = '<option value="">-- Select Field --</option>';
+                            data.forEach(field => {
+                                const option = document.createElement('option');
+                                option.value = field.id;
+                                option.textContent = `${field.field_name} - ₦${new Intl.NumberFormat().format(field.price)}`;
+                                option.dataset.price = field.price;
+                                option.dataset.description = field.description;
+                                fieldSelect.appendChild(option);
+                            });
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            fieldSelect.innerHTML = '<option value="">Error loading fields</option>';
+                        });
+                } else {
+                    fieldSelect.innerHTML = '<option value="">-- Select Field --</option>';
+                    resetFields();
+                }
+            });
+
+            fieldSelect.addEventListener('change', function () {
+                const selected = this.options[this.selectedIndex];
+                if (selected.value) {
+                    modificationFee = parseFloat(selected.dataset.price);
+                    fieldDescription.textContent = selected.dataset.description || '';
+                    fieldPriceDisplay.textContent = '₦' + new Intl.NumberFormat().format(modificationFee);
+                } else {
+                    resetFields();
+                }
+                calculateTotal();
+            });
+
+            affidavitSelect.addEventListener('change', function () {
+                if (this.value === 'not_available') {
+                    affidavitUploadWrapper.style.display = 'none';
+                    // We assume a standard fee for affidavit if not available, OR we should fetch it.
+                    // Given the controller logic: $affidavitFee = ...
+                    // We can pass this fee to the view:
+                    affidavitFee = 2000; // As per text warning in blade
+                } else if (this.value === 'available') {
+                    affidavitUploadWrapper.style.display = 'block';
+                    affidavitFee = 0;
+                } else {
+                    affidavitUploadWrapper.style.display = 'none';
+                    affidavitFee = 0;
+                }
+                calculateTotal();
+            });
+
+            function calculateTotal() {
+                const total = modificationFee + affidavitFee;
+                totalAmountDisplay.textContent = '₦' + new Intl.NumberFormat().format(total);
+                
+                let breakdown = `Modification: ₦${new Intl.NumberFormat().format(modificationFee)}`;
+                if (affidavitFee > 0) {
+                    breakdown += ` + Affidavit: ₦${new Intl.NumberFormat().format(affidavitFee)}`;
+                }
+                feeBreakdown.textContent = breakdown;
+            }
+
+            function resetFields() {
+                modificationFee = 0;
+                fieldDescription.textContent = '';
+                fieldPriceDisplay.textContent = '₦0.00';
+            }
+        });
+    </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 </x-app-layout>

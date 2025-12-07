@@ -107,6 +107,7 @@
                                             <th>Name</th>
                                             <th>Phone Number</th>
                                             <th>Email</th>
+                                            <th>Amount</th>
                                             <th>Agent Code</th>
                                             <th>Status</th>
                                             <th>Action</th>
@@ -120,6 +121,7 @@
                                                 <td>{{ $submission->account_name }}</td>
                                                 <td>{{ $submission->phone_no }}</td>
                                                 <td>{{ $submission->email }}</td>
+                                                <td>₦{{ number_format($submission->amount, 2) }}</td>
                                                 <td>{{ $submission->agent_code }}</td>
                                                 <td>
                                                     <span class="badge bg-{{ match($submission->status) {
