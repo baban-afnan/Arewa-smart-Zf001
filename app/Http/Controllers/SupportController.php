@@ -100,6 +100,16 @@ class SupportController extends Controller
         // Send Auto Reply
         $this->sendAutoReply($ticket);
 
+        if ($request->wantsJson()) {
+            // Eager load user for the response
+            $message = SupportMessage::with('user')->find($message->id);
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'ticket_status' => $ticket->status
+            ]);
+        }
+
         return back()->with('success', 'Reply sent successfully.');
     }
 

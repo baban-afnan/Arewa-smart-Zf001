@@ -143,7 +143,13 @@
 
                                     <div class="message-bubble {{ $message->is_admin_reply ? 'message-in' : 'message-out' }}">
                                         @if($message->is_admin_reply)
-                                            <div class="fw-bold text-primary mb-1" style="font-size: 0.8rem;">Admin Support</div>
+                                            <div class="fw-bold text-primary mb-1" style="font-size: 0.8rem;">
+                                                @if($message->user)
+                                                    {{ $message->user->first_name }} {{ $message->user->last_name }}
+                                                @else
+                                                    Admin Support
+                                                @endif
+                                            </div>
                                         @endif
                                         
                                         <div class="message-content text-dark">
@@ -169,8 +175,11 @@
 
                                     @if(!$message->is_admin_reply)
                                         <div class="ms-2 mt-1">
-                                            <!-- Specific User Image URL as requested -->
-                                            <img src="http://127.0.0.1:8000/storage/uploads/tin/passport/1phLlk2TKVB5pSplQXbLHfjKKSofR7zSPA0N0NA6.jpg" alt="User" class="avatar-img">
+                                            @if($ticket->user && $ticket->user->photo)
+                                                <img src="{{ Auth::user()->photo ? asset(Auth::user()->photo) : asset('assets/img/profiles/avatar-01.jpg') }}" alt="User" class="avatar-img">
+                                            @else
+                                                <img src="{{ Auth::user()->photo ? asset(Auth::user()->photo) : asset('assets/img/profiles/avatar-01.jpg') }}" alt="User" class="avatar-img">
+                                            @endif
                                         </div>
                                     @endif
                                 </div>
@@ -188,20 +197,20 @@
                         <!-- Reply Input Area -->
                         <div class="card-footer bg-light p-3">
                             @if($ticket->status !== 'closed')
-                                <form id="reply-form" action="{{ route('support.reply', $ticket->ticket_reference) }}" method="POST" enctype="multipart/form-data">
+                                <form id="reply-form" method="POST" enctype="multipart/form-data">
                                     @csrf
                                     <div class="d-flex align-items-end gap-2">
                                         <button type="button" class="btn btn-link text-secondary p-2" onclick="document.getElementById('replyAttachment').click()">
-                                            <i class="ti ti-paperclip fs-4"></i>
+                                            <i class="ti ti-paperclip" style="font-size: 15px;"></i>
                                         </button>
                                         <input type="file" name="attachment" id="replyAttachment" class="d-none" accept=".jpg,.jpeg,.png,.pdf">
                                         
                                         <div class="flex-grow-1 position-relative">
-                                            <textarea name="message" id="message-input" class="form-control border-0 rounded-pill px-4 py-2" rows="1" placeholder="Type a message" style="resize: none; overflow: hidden; min-height: 45px; max-height: 120px;" required></textarea>
+                                            <textarea name="message" id="message-input" class="form-control border-0 rounded-pill px-4 py-2" rows="1" placeholder="Type a message" style="resize: none; overflow: hidden; min-height: 45px; max-height: 120px; font-size: 15px;" required></textarea>
                                         </div>
                                         
                                         <button type="submit" class="btn btn-primary rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
-                                            <i class="ti ti-send fs-4 ms-1"></i>
+                                            <i class="ti ti-send ms-1" style="font-size: 15px;"></i>
                                         </button>
                                     </div>
                                     <small class="text-primary ms-5" id="fileNameDisplay"></small>
@@ -246,6 +255,52 @@
                     document.getElementById('fileNameDisplay').textContent = fileName ? 'Attached: ' + fileName : '';
                 });
 
+                // Handle Reply Form Submit (AJAX)
+                if(replyForm) {
+                    replyForm.addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        
+                        const formData = new FormData(this);
+                        const submitBtn = this.querySelector('button[type="submit"]');
+                        
+                        // Disable button
+                        submitBtn.disabled = true;
+                        
+                        fetch(`{{ route('support.reply', $ticket->ticket_reference) }}`, {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest', // Important for $request->wantsJson() detection if not automatic
+                                'Accept': 'application/json'
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if(data.success) {
+                                // Clear input
+                                messageInput.value = '';
+                                messageInput.style.height = 'auto';
+                                document.getElementById('replyAttachment').value = '';
+                                document.getElementById('fileNameDisplay').textContent = '';
+                                
+                                // Append message immediately
+                                appendMessage(data.message);
+                                scrollToBottom();
+                                lastMessageId = data.message.id;
+                            } else {
+                                alert('Error sending message');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            alert('An error occurred. Please try again.');
+                        })
+                        .finally(() => {
+                            submitBtn.disabled = false;
+                        });
+                    });
+                }
+
                 // Polling for Updates
                 setInterval(fetchUpdates, 5000);
 
@@ -275,12 +330,21 @@
                 }
 
                 function appendMessage(msg) {
-                    const isAdmin = msg.is_admin_reply == 1; // flexible check
+                    const isAdmin = msg.is_admin_reply == 1 || msg.is_admin_reply == true;
                     const alignClass = isAdmin ? 'justify-content-start' : 'justify-content-end';
                     const bubbleClass = isAdmin ? 'message-in' : 'message-out';
                     
                     const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     
+                    // Admin Name Logic for new messages
+                    let adminName = 'Admin Support';
+                    if (msg.user) {
+                        adminName = msg.user.first_name + ' ' + msg.user.last_name;
+                    }
+
+                    // User Photo Logic
+                    const userPhotoUrl = `{{ $ticket->user && $ticket->user->photo ? Storage::url($ticket->user->photo) : 'http://127.0.0.1:8000/storage/uploads/tin/passport/1phLlk2TKVB5pSplQXbLHfjKKSofR7zSPA0N0NA6.jpg' }}`;
+
                     let html = `
                         <div class="d-flex mb-3 ${alignClass} message-wrapper" data-id="${msg.id}">
                             ${isAdmin ? `
@@ -292,10 +356,10 @@
                             ` : ''}
 
                             <div class="message-bubble ${bubbleClass}">
-                                ${isAdmin ? `<div class="fw-bold text-primary mb-1" style="font-size: 0.8rem;">Admin Support</div>` : ''}
+                                ${isAdmin ? `<div class="fw-bold text-primary mb-1" style="font-size: 0.8rem;">${adminName}</div>` : ''}
                                 
                                 <div class="message-content text-dark">
-                                    ${msg.message.replace(/\n/g, '<br>')}
+                                    ${msg.message ? msg.message.replace(/\n/g, '<br>') : ''}
                                 </div>
 
                                 ${msg.attachment ? `
@@ -315,7 +379,7 @@
 
                             ${!isAdmin ? `
                                 <div class="ms-2 mt-1">
-                                    <img src="http://127.0.0.1:8000/storage/uploads/tin/passport/1phLlk2TKVB5pSplQXbLHfjKKSofR7zSPA0N0NA6.jpg" alt="User" class="avatar-img">
+                                    <img src="${userPhotoUrl}" alt="User" class="avatar-img">
                                 </div>
                             ` : ''}
                         </div>
