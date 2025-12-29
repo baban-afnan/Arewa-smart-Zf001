@@ -214,12 +214,26 @@
                                         </td>
 
                                         <td>
+                                            @php
+                                                $fileUrl = '';
+                                                if (!empty($submission->affidavit_file_url)) {
+                                                    $f = $submission->affidavit_file_url;
+                                                    if (preg_match('/^https?:\/\//', $f)) {
+                                                        $fileUrl = $f;
+                                                    } elseif (str_starts_with($f, '/storage') || str_starts_with($f, 'storage')) {
+                                                        $fileUrl = asset(ltrim($f, '/'));
+                                                    } else {
+                                                        $fileUrl = \Illuminate\Support\Facades\Storage::url($f);
+                                                    }
+                                                }
+                                            @endphp
+
                                             <button type="button"
                                                     class="btn btn-sm btn-outline-primary"
                                                     data-bs-toggle="modal"
                                                     data-bs-target="#commentModal"
                                                     data-comment="{{ $submission->comment ?? 'No comment yet.' }}"
-                                                    data-file-url="{{ $submission->affidavit_file_url ? asset($submission->affidavit_file_url) : '' }}"
+                                                    data-file-url="{{ $fileUrl }}"
                                                     data-approved-by="{{ $submission->approved_by }}">
                                                 <i class="bi bi-chat-left-text"></i> View
                                             </button>

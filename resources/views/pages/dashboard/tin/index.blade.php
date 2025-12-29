@@ -257,24 +257,6 @@
                             <div class="wizard-step d-none" id="step-4">
                                 <h6 class="fw-bold text-primary mb-3 border-bottom pb-2">Supporting Documents</h6>
                                 
-                                <div id="individual-uploads" class="d-none">
-                                    <div class="row g-3 mb-4">
-                                        <div class="col-md-12">
-                                            <label class="form-label">Passport Photograph <span class="text-danger">*</span></label>
-                                            <input type="file" class="form-control" name="passport_upload" accept="image/*,.pdf">
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div id="corporate-uploads" class="d-none">
-                                    <div class="row g-3 mb-4">
-                                        <div class="col-md-12">
-                                            <label class="form-label">CAC Certificate <span class="text-danger">*</span></label>
-                                            <input type="file" class="form-control" name="cac_certificate" accept="image/*,.pdf">
-                                        </div>
-                                    </div>
-                                </div>
-
                                 <!-- Terms -->
                                 <div class="col-md-12">
                                     <div class="form-check mt-2">
@@ -343,11 +325,25 @@
                                                 </span>
                                             </td>
                                             <td>
+                                                @php
+                                                    $fileUrl = '';
+                                                    if (!empty($submission->file_url)) {
+                                                        $f = $submission->file_url;
+                                                        if (preg_match('/^https?:\/\//', $f)) {
+                                                            $fileUrl = $f;
+                                                        } elseif (str_starts_with($f, '/storage') || str_starts_with($f, 'storage')) {
+                                                            $fileUrl = asset(ltrim($f, '/'));
+                                                        } else {
+                                                            $fileUrl = \Illuminate\Support\Facades\Storage::url($f);
+                                                        }
+                                                    }
+                                                @endphp
+
                                                 <button type="button" class="btn btn-xs btn-outline-primary"
                                                         data-bs-toggle="modal"
                                                         data-bs-target="#commentModal"
                                                         data-comment="{{ $submission->comment ?? 'No comment yet.' }}"
-                                                        data-file-url="{{ $submission->file_url ? \Illuminate\Support\Facades\Storage::url($submission->file_url) : '' }}"
+                                                        data-file-url="{{ $fileUrl }}"
                                                         data-approved-by="{{ $submission->approved_by ?? '' }}">
                                                     View
                                                 </button>
@@ -383,8 +379,6 @@
             // Sections to toggle
             const individualFields = document.getElementById('individual-fields');
             const corporateFields = document.getElementById('corporate-fields');
-            const individualUploads = document.getElementById('individual-uploads');
-            const corporateUploads = document.getElementById('corporate-uploads');
             
             let currentStep = 0;
 
@@ -392,24 +386,16 @@
                 if (type === 'corporate') {
                     individualFields.classList.add('d-none');
                     corporateFields.classList.remove('d-none');
-                    individualUploads.classList.add('d-none');
-                    corporateUploads.classList.remove('d-none');
                     
                     // Disable inputs in hidden sections to avoid validation errors
                     toggleInputs(individualFields, true);
                     toggleInputs(corporateFields, false);
-                    toggleInputs(individualUploads, true);
-                    toggleInputs(corporateUploads, false);
                 } else {
                     individualFields.classList.remove('d-none');
                     corporateFields.classList.add('d-none');
-                    individualUploads.classList.remove('d-none');
-                    corporateUploads.classList.add('d-none');
                     
                     toggleInputs(individualFields, false);
                     toggleInputs(corporateFields, true);
-                    toggleInputs(individualUploads, false);
-                    toggleInputs(corporateUploads, true);
                 }
             }
 

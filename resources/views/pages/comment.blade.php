@@ -3,7 +3,7 @@
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0 shadow-lg rounded-3 overflow-hidden">
             
-            <!-- Header -->
+            <!-- Modal Header -->
             <div class="modal-header bg-primary text-white py-3 px-4">
                 <div class="d-flex align-items-center gap-2">
                     <i class="bi bi-chat-left-text fs-4"></i>
@@ -12,7 +12,7 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             
-            <!-- Body -->
+            <!-- Modal Body -->
             <div class="modal-body bg-light p-4" id="commentModalBody" style="font-size: 1rem; white-space: pre-wrap; min-height: 160px;">
                 <div class="text-center text-secondary">
                     <div class="spinner-border text-primary mb-3" role="status"></div>
@@ -20,7 +20,7 @@
                 </div>
             </div>
 
-            <!-- Footer -->
+            <!-- Modal Footer -->
             <div class="modal-footer bg-white border-top d-flex justify-content-between align-items-center py-2 px-4">
                 <div class="d-flex flex-wrap gap-2">
                     <a href="#" class="btn btn-sm btn-outline-primary rounded-pill px-3">
@@ -36,19 +36,17 @@
                         <i class="bi bi-download me-1"></i> Download File
                     </a>
                 </div>
-
                 <div id="encouragement" class="text-muted small fst-italic"></div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- AREWA SMART: Dynamic Encouragement Script -->
 <script>
     document.addEventListener("DOMContentLoaded", function() {
-        const messages = [
+        const ENCOURAGEMENT_MESSAGES = [
             "Keep pushing forward — success is near!",
-            "Believe in yourself, you’ve got this!",
+            "Believe in yourself, you've got this!",
             "Every step counts, no matter how small.",
             "Great things take time — stay patient.",
             "Your effort today is your victory tomorrow!",
@@ -56,44 +54,49 @@
             "Never give up — your breakthrough is close!"
         ];
 
-        const encouragement = document.getElementById("encouragement");
-        const modal = document.getElementById("commentModal");
-        const modalBody = document.getElementById("commentModalBody");
-        const downloadBtn = document.getElementById("downloadBtn");
+        const elements = {
+            modal: document.getElementById("commentModal"),
+            modalBody: document.getElementById("commentModalBody"),
+            encouragement: document.getElementById("encouragement"),
+            downloadBtn: document.getElementById("downloadBtn")
+        };
 
-        // Show random encouragement each time modal opens
-        modal.addEventListener("show.bs.modal", function (event) {
+        elements.modal.addEventListener("show.bs.modal", handleModalOpen);
+
+        function handleModalOpen(event) {
             const button = event.relatedTarget;
             const comment = button.getAttribute('data-comment');
             const fileUrl = button.getAttribute('data-file-url');
             const approvedBy = button.getAttribute('data-approved-by');
 
-            // Populate Comment
-            let content = '';
-            if (comment) {
-                content += comment;
-            } else {
-                content += 'No comment available.';
-            }
+            populateModalContent(comment, approvedBy);
+            handleDownloadButton(fileUrl);
+            displayEncouragement();
+        }
 
+        function populateModalContent(comment, approvedBy) {
+            let content = comment || 'No comment available.';
             if (approvedBy) {
-                content += '\n\nApproved By: ' + approvedBy;
+                content += `\n\nApproved By: ${approvedBy}`;
             }
+            elements.modalBody.innerText = content;
+        }
 
-            modalBody.innerText = content;
-
-            // Handle Download Button
+        function handleDownloadButton(fileUrl) {
             if (fileUrl && fileUrl !== 'null') {
-                downloadBtn.href = fileUrl;
-                downloadBtn.classList.remove('d-none');
+                const fileName = fileUrl.split('/').pop();
+                elements.downloadBtn.href = `/storage/tin-files/${fileName}`;
+                elements.downloadBtn.setAttribute('download', fileName);
+                elements.downloadBtn.classList.remove('d-none');
             } else {
-                downloadBtn.classList.add('d-none');
-                downloadBtn.href = '#';
+                elements.downloadBtn.classList.add('d-none');
+                elements.downloadBtn.href = '#';
             }
+        }
 
-            // Random Encouragement
-            const randomMessage = messages[Math.floor(Math.random() * messages.length)];
-            encouragement.innerText = randomMessage;
-        });
+        function displayEncouragement() {
+            const randomMessage = ENCOURAGEMENT_MESSAGES[Math.floor(Math.random() * ENCOURAGEMENT_MESSAGES.length)];
+            elements.encouragement.innerText = randomMessage;
+        }
     });
 </script>

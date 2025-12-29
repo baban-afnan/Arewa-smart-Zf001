@@ -206,12 +206,26 @@
                                                 } }}">{{ ucfirst($submission->status) }}</span>
                                             </td>
                                             <td>
+                                                @php
+                                                    $fileUrl = '';
+                                                    if (!empty($submission->file_url)) {
+                                                        $f = $submission->file_url;
+                                                        if (preg_match('/^https?:\/\//', $f)) {
+                                                            $fileUrl = $f;
+                                                        } elseif (str_starts_with($f, '/storage') || str_starts_with($f, 'storage')) {
+                                                            $fileUrl = asset(ltrim($f, '/'));
+                                                        } else {
+                                                            $fileUrl = \Illuminate\Support\Facades\Storage::url($f);
+                                                        }
+                                                    }
+                                                @endphp
+
                                                 <button type="button"
                                                         class="btn btn-sm btn-outline-primary"
                                                         data-bs-toggle="modal"
                                                         data-bs-target="#commentModal"
                                                         data-comment="{{ $submission->comment ?? 'No comment yet.' }}"
-                                                        data-file-url="{{ $submission->file_url ? asset($submission->file_url) : '' }}">
+                                                        data-file-url="{{ $fileUrl }}">
                                                     <i class="bi bi-chat-left-text"></i> View
                                                 </button>
                                             </td>

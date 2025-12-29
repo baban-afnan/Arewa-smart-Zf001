@@ -97,7 +97,6 @@ class TinRegistrationController extends Controller
                 'company_name' => 'required|string',
                 'organization_type' => 'required|string',
                 'registration_number' => 'required|string',
-                'cac_certificate' => 'required|file|mimes:jpg,jpeg,png,pdf|max:2048',
                 // Require contact person details for corporate as well
                 'first_name' => 'required|string',
                 'last_name' => 'required|string',
@@ -112,7 +111,6 @@ class TinRegistrationController extends Controller
                 'nin' => 'required|string',
                 'date_of_birth' => 'required|date',
                 'marital_status' => 'required|string',
-                'passport_upload' => 'required|file|mimes:jpg,jpeg,png,pdf|max:2048',
             ]);
         }
 
@@ -146,16 +144,8 @@ class TinRegistrationController extends Controller
             $performedBy = trim($user->first_name . ' ' . $user->last_name);
 
             $uploads = [];
+            // Uploads removed as per request
 
-            if ($isCorporate) {
-                if ($request->hasFile('cac_certificate')) {
-                    $uploads['cac_certificate'] = $request->file('cac_certificate')->store('uploads/tin/cac', 'public');
-                }
-            } else {
-                if ($request->hasFile('passport_upload')) {
-                    $uploads['passport'] = $request->file('passport_upload')->store('uploads/tin/passport', 'public');
-                }
-            }
 
             // Prepare Data for JSON field
             $formData = $request->except([
