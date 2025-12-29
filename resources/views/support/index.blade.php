@@ -31,7 +31,7 @@
                                     <p class="mb-0 text-white-50">Our support team is available on WhatsApp for quick resolution.</p>
                                 </div>
                             </div>
-                            <a href="https://wa.me/+2349110501995" target="_blank" class="btn btn-light text-success fw-bold rounded-pill px-4 shadow-sm">
+                            <a href="https://wa.me/+2347037343660" target="_blank" class="btn btn-light text-success fw-bold rounded-pill px-4 shadow-sm">
                                 Chat Now
                             </a>
                         </div>

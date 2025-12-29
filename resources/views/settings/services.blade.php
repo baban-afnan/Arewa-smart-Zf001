@@ -45,7 +45,7 @@
                     <div class="card-body text-center pt-0">
                         <!-- Profile Photo with Edit Button -->
                         <div class="position-relative d-inline-block mb-3" style="margin-top: -60px;">
-                            <img src="{{ $user->photo ? asset($user->photo) : asset('assets/img/profiles/avatar-01.jpg') }}"
+                            <img src="{{ $user->photo ? (str_starts_with($user->photo, 'http') ? $user->photo : asset($user->photo)) : asset('assets/img/profiles/avatar-01.jpg') }}"
                                  alt="Profile Photo"
                                  class="rounded-circle img-thumbnail shadow-lg bg-white"
                                  style="width:120px;height:120px;object-fit:cover; border: 4px solid #fff; cursor: pointer;"

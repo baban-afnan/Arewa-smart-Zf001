@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use App\Models\AgentService;
 use App\Models\Service;
 use App\Models\ServiceField;
@@ -119,13 +120,21 @@ class AffidavitController extends Controller
         DB::beginTransaction();
 
         try {
-            // Handle File Uploads
-            $ninSlipPath = $request->file('nin_slip')->store('uploads/affidavit/nin_slips', 'public');
-            $passportPath = $request->file('passport')->store('uploads/affidavit/passports', 'public');
+            // Handle File Uploads using Laravel's Storage
+            $ninSlipFile = $request->file('nin_slip');
+            $passportFile = $request->file('passport');
 
-            // Convert to full URLs
-            $ninSlipPath = asset('storage/' . $ninSlipPath);
-            $passportPath = asset('storage/' . $passportPath);
+            // Generate unique filenames
+            $ninSlipName = 'nin_slip_' . time() . '_' . Str::random(10) . '.' . $ninSlipFile->getClientOriginalExtension();
+            $passportName = 'passport_' . time() . '_' . Str::random(10) . '.' . $passportFile->getClientOriginalExtension();
+
+            // Store files in storage/app/public/uploads/affidavit
+            $ninSlipPath = $ninSlipFile->storeAs('uploads/affidavit/nin_slips', $ninSlipName, 'public');
+            $passportPath = $passportFile->storeAs('uploads/affidavit/passports', $passportName, 'public');
+
+            // Get full URLs
+            $ninSlipUrl = Storage::disk('public')->url($ninSlipPath);
+            $passportUrl = Storage::disk('public')->url($passportPath);
 
             $reference = 'AFF' . date('is') . strtoupper(substr(uniqid(mt_rand(), true), -5));
             $performedBy = trim($user->first_name . ' ' . $user->last_name);
@@ -196,9 +205,9 @@ class AffidavitController extends Controller
                 'service_name'    => $serviceName,
                 'field_name'      => $fieldName,
                 'description'     => "Old Details: " . $request->old_details . "\nNew Details: " . $request->new_details,
-                'nin_slip_url'        => $ninSlipPath, 
-                'passport_url' => $passportPath, 
-                'amount'     => $totalAmount,
+                'nin_slip_url'    => $ninSlipUrl, 
+                'passport_url'    => $passportUrl, 
+                'amount'          => $totalAmount,
                 'performed_by'    => $performedBy,
                 'transaction_id'  => $transaction->id,
                 'submission_date' => now(),
@@ -218,6 +227,15 @@ class AffidavitController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+            
+            // Clean up uploaded files if transaction fails
+            if (isset($ninSlipPath)) {
+                Storage::disk('public')->delete($ninSlipPath);
+            }
+            if (isset($passportPath)) {
+                Storage::disk('public')->delete($passportPath);
+            }
+            
             report($e);
 
             return back()->with([

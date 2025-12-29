@@ -43,7 +43,16 @@ class SupportController extends Controller
 
         $attachmentPath = null;
         if ($request->hasFile('attachment')) {
-            $attachmentPath = $request->file('attachment')->store('uploads/support', 'public');
+            $file = $request->file('attachment');
+            $fileName = 'support_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
+            $destinationPath = public_path('uploads/support');
+            
+            if (!file_exists($destinationPath)) {
+                mkdir($destinationPath, 0755, true);
+            }
+            
+            $file->move($destinationPath, $fileName);
+            $attachmentPath = rtrim(config('app.url'), '/') . '/uploads/support/' . $fileName;
         }
 
         SupportMessage::create([
@@ -84,7 +93,16 @@ class SupportController extends Controller
 
         $attachmentPath = null;
         if ($request->hasFile('attachment')) {
-            $attachmentPath = $request->file('attachment')->store('uploads/support', 'public');
+            $file = $request->file('attachment');
+            $fileName = 'support_reply_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
+            $destinationPath = public_path('uploads/support');
+            
+            if (!file_exists($destinationPath)) {
+                mkdir($destinationPath, 0755, true);
+            }
+            
+            $file->move($destinationPath, $fileName);
+            $attachmentPath = rtrim(config('app.url'), '/') . '/uploads/support/' . $fileName;
         }
 
         SupportMessage::create([

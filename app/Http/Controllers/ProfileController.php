@@ -60,7 +60,6 @@ class ProfileController extends Controller
             'pin' => 'required|digits:5',
             'termsCheck' => 'required|string|max:500', 
         ], [
-            // ... existing validation messages ...
             'pin.required' => 'Transaction PIN is required.',
             'pin.digits' => 'PIN must be exactly 5 digits.',
         ]);
@@ -98,17 +97,20 @@ class ProfileController extends Controller
         $user = Auth::user();
 
         try {
-            // ✅ Delete old photo if exists (and not external link)
-            if ($user->photo && !Str::startsWith($user->photo, 'http')) {
-                $oldPath = str_replace(url('/') . '/storage/', '', $user->photo);
-                Storage::disk('public')->delete($oldPath);
+            // ✅ Delete old photo if exists (with improved logic)
+            if ($user->photo) {
+                $this->deleteOldProfilePhoto($user->photo);
             }
 
-            // ✅ Store new image
-            $path = $request->file('photo')->store('profile_photos', 'public');
-
+            // ✅ Store new image using Laravel's Storage facade
+            $file = $request->file('photo');
+            $fileName = 'profile_' . $user->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+            
+            // Store in storage/app/public/uploads/profile_photos
+            $path = $file->storeAs('uploads/profile_photos', $fileName, 'public');
+            
             // ✅ Build full HTTP link
-            $fullUrl = url('storage/' . $path);
+            $fullUrl = Storage::disk('public')->url($path);
 
             // ✅ Save to database
             $user->update([
@@ -118,6 +120,40 @@ class ProfileController extends Controller
             return back()->with('status', '✅ Profile photo updated successfully!');
         } catch (\Exception $e) {
             return back()->with('error', '❌ Failed to update profile photo: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Delete old profile photo with proper handling
+     */
+    private function deleteOldProfilePhoto(string $photoUrl): void
+    {
+        // Skip external URLs (like gravatar)
+        if (Str::startsWith($photoUrl, 'http') && !Str::contains($photoUrl, '/storage/')) {
+            return;
+        }
+
+        try {
+            // If it's a storage URL, extract the path
+            if (Str::contains($photoUrl, '/storage/')) {
+                // Remove the base URL to get the storage path
+                $baseUrl = config('app.url') . '/storage/';
+                $path = str_replace($baseUrl, '', $photoUrl);
+                Storage::disk('public')->delete($path);
+            } 
+            // If it's already a storage path (not full URL)
+            elseif (Storage::disk('public')->exists($photoUrl)) {
+                Storage::disk('public')->delete($photoUrl);
+            }
+            // For old-style public/uploads paths
+            elseif (Str::contains($photoUrl, '/uploads/')) {
+                // Extract filename from URL
+                $filename = basename($photoUrl);
+                Storage::disk('public')->delete('uploads/profile_photos/' . $filename);
+            }
+        } catch (\Exception $e) {
+            // Log error but don't fail the upload
+            \Log::error('Failed to delete old profile photo: ' . $e->getMessage());
         }
     }
 
@@ -142,6 +178,7 @@ class ProfileController extends Controller
 
         return true;
     }
+    
     /**
      * Update additional profile information (only if not already set).
      */

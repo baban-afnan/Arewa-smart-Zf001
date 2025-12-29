@@ -83,9 +83,9 @@
         }
 
         function handleDownloadButton(fileUrl) {
-            if (fileUrl && fileUrl !== 'null') {
+            if (fileUrl && fileUrl !== 'null' && fileUrl.trim() !== '') {
                 const fileName = fileUrl.split('/').pop();
-                elements.downloadBtn.href = `/storage/tin-files/${fileName}`;
+                elements.downloadBtn.href = fileUrl;
                 elements.downloadBtn.setAttribute('download', fileName);
                 elements.downloadBtn.classList.remove('d-none');
             } else {

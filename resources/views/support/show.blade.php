@@ -1,5 +1,27 @@
 <x-app-layout>
     <title>Arewa Smart - Ticket #{{ $ticket->ticket_reference }}</title>
+    <style>
+        .chat-wrapper {
+            height: 75vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .message-bubble {
+            max-width: 75%;
+        }
+        @media (max-width: 768px) {
+            .chat-wrapper {
+                height: 85vh;
+            }
+            .message-bubble {
+                max-width: 90%;
+            }
+            .container-fluid {
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+        }
+    </style>
     <div class="page-body">
         <div class="container-fluid">
             <div class="page-title mb-3">
@@ -29,7 +51,7 @@
         <div class="container-fluid">
             <div class="row">
                 <div class="col-lg-12">
-                    <div class="card shadow-sm border-0" style="height: 75vh; display: flex; flex-direction: column;">
+                    <div class="card shadow-sm border-0 chat-wrapper">
                         <!-- Chat Header -->
                         <div class="card-header bg-light border-bottom">
                             <div class="d-flex justify-content-between align-items-center">
@@ -59,15 +81,32 @@
                                         </div>
                                     @endif
 
-                                    <div class="card border-0 shadow-sm" style="max-width: 75%; {{ $message->is_admin_reply ? 'background-color: #fff; border-top-left-radius: 0;' : 'background-color: #e3f2fd; border-top-right-radius: 0;' }}">
+                                    <div class="card border-0 shadow-sm message-bubble" style="{{ $message->is_admin_reply ? 'background-color: #fff; border-top-left-radius: 0;' : 'background-color: #e3f2fd; border-top-right-radius: 0;' }}">
                                         <div class="card-body p-3">
                                             <p class="mb-1 text-dark">{{ $message->message }}</p>
                                             
                                             @if($message->attachment)
                                                 <div class="mt-2">
-                                                    <a href="{{ Storage::url($message->attachment) }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                                        <i class="ti ti-paperclip"></i> View Attachment
-                                                    </a>
+                                                    @php
+                                                        $attachmentUrl = $message->attachment;
+                                                        if (!str_starts_with($attachmentUrl, 'http')) {
+                                                            $attachmentUrl = Storage::url($attachmentUrl);
+                                                        }
+                                                        $extension = strtolower(pathinfo($message->attachment, PATHINFO_EXTENSION));
+                                                        $isImage = in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+                                                    @endphp
+
+                                                    @if($isImage)
+                                                        <div class="mb-2">
+                                                            <a href="{{ $attachmentUrl }}" target="_blank">
+                                                                <img src="{{ $attachmentUrl }}" alt="Attachment" class="img-fluid rounded border" style="max-width: 100%; max-height: 300px;">
+                                                            </a>
+                                                        </div>
+                                                    @else
+                                                        <a href="{{ $attachmentUrl }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                            <i class="ti ti-paperclip"></i> View Attachment
+                                                        </a>
+                                                    @endif
                                                 </div>
                                             @endif
                                             
@@ -93,21 +132,22 @@
                         <!-- Reply Area -->
                         <div class="card-footer bg-white border-top p-3">
                             @if($ticket->status !== 'closed')
-                                <form action="{{ route('support.reply', $ticket->ticket_reference) }}" method="POST" enctype="multipart/form-data">
+                                <form action="{{ route('support.reply', $ticket->ticket_reference) }}" method="POST" enctype="multipart/form-data" class="d-flex align-items-end gap-2">
                                     @csrf
-                                    <div class="input-group">
-                                        <button type="button" class="btn btn-light border" onclick="document.getElementById('replyAttachment').click()">
-                                            <i class="ti ti-paperclip"></i>
-                                        </button>
-                                        <input type="file" name="attachment" id="replyAttachment" class="d-none" accept=".jpg,.jpeg,.png,.pdf">
-                                        
-                                        <input type="text" name="message" class="form-control" placeholder="Type your reply here..." required>
-                                        
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="ti ti-send"></i> Send
-                                        </button>
+                                    <input type="file" name="attachment" id="replyAttachment" class="d-none" accept=".jpg,.jpeg,.png,.pdf">
+                                    
+                                    <button type="button" class="btn btn-light border rounded-circle flex-shrink-0" style="width: 40px; height: 40px;" onclick="document.getElementById('replyAttachment').click()">
+                                        <i class="ti ti-paperclip"></i>
+                                    </button>
+                                    
+                                    <div class="flex-grow-1 position-relative">
+                                        <textarea name="message" id="chatMessage" class="form-control border bg-light" placeholder="Type your reply here..." rows="1" required style="resize: none; overflow-y: hidden; min-height: 40px; border-radius: 20px; padding-top: 10px; padding-bottom: 10px;"></textarea>
+                                        <small class="text-muted mt-1 position-absolute start-0 ms-3" style="top: 100%;" id="fileNameDisplay"></small>
                                     </div>
-                                    <small class="text-muted mt-1 d-block" id="fileNameDisplay"></small>
+                                    
+                                    <button type="submit" class="btn btn-primary rounded-circle flex-shrink-0" style="width: 40px; height: 40px;">
+                                        <i class="ti ti-send"></i>
+                                    </button>
                                 </form>
                             @else
                                 <div class="alert alert-secondary mb-0 text-center">
@@ -126,6 +166,21 @@
                 const fileName = e.target.files[0]?.name;
                 document.getElementById('fileNameDisplay').textContent = fileName ? 'Attached: ' + fileName : '';
             });
+
+            // Auto-expand textarea
+            const chatMessage = document.getElementById('chatMessage');
+            if(chatMessage) {
+                chatMessage.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
+                    // Limit max height to around 150px (approx 5-6 lines)
+                    if (this.scrollHeight > 150) {
+                        this.style.overflowY = 'auto';
+                    } else {
+                        this.style.overflowY = 'hidden';
+                    }
+                });
+            }
 
             // Auto-reload chat every 5 seconds
             let lastMessageId = {{ $ticket->messages->last()?->id ?? 0 }};

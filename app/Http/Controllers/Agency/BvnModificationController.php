@@ -9,6 +9,7 @@ use App\Models\Service;
 use App\Models\Wallet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use App\Http\Controllers\Controller;
 
@@ -26,8 +27,7 @@ class BvnModificationController extends Controller
             ->get();
 
         $query = AgentService::where('user_id', $user->id)
-        ->where('service_type', 'bvn_modification');
-
+            ->where('service_type', 'bvn_modification');
 
         // Apply optional filters
         if ($request->filled('search')) {
@@ -123,10 +123,15 @@ class BvnModificationController extends Controller
         try {
             // Handle affidavit upload
             $fileName = null;
+            $fileUrl = null;
+            
             if ($affidavitUploaded) {
                 $file = $request->file('affidavit_file');
                 $fileName = 'affidavit_' . Str::slug($user->email) . '_' . time() . '.' . $file->getClientOriginalExtension();
-                $file->move(public_path('uploads/affidavits'), $fileName);
+                
+                // Store in storage/app/public/uploads/affidavits
+                $path = $file->storeAs('uploads/affidavits', $fileName, 'public');
+                $fileUrl = Storage::disk('public')->url($path);
             }
 
             // Debit wallet
@@ -158,8 +163,8 @@ class BvnModificationController extends Controller
             AgentService::create([
                 'reference' => $transactionRef,
                 'user_id' => $user->id,
-                'service_id'      => $serviceField->service_id,
-                'service_field_id'  => $serviceField->id,
+                'service_id' => $serviceField->service_id,
+                'service_field_id' => $serviceField->id,
                 'service_name' => $service->name,
                 'field_code' => $serviceField->field_code,
                 'field_name' => $serviceField->field_name,
@@ -170,7 +175,7 @@ class BvnModificationController extends Controller
                 'amount' => $totalAmount,
                 'affidavit_file' => $fileName,
                 'affidavit' => $validated['affidavit'],
-                'affidavit_file_url' => $fileName ? asset('uploads/affidavits/' . $fileName) : null,
+                'affidavit_file_url' => $fileUrl,
                 'transaction_id' => $transaction->id,
                 'submission_date' => now(),
                 'status' => 'pending',
@@ -189,8 +194,9 @@ class BvnModificationController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            if (isset($fileName) && file_exists(public_path('uploads/affidavits/' . $fileName))) {
-                @unlink(public_path('uploads/affidavits/' . $fileName));
+            // Clean up uploaded file if exists
+            if ($affidavitUploaded && isset($fileName)) {
+                Storage::disk('public')->delete('uploads/affidavits/' . $fileName);
             }
 
             return redirect()->route('modification')->withErrors([
