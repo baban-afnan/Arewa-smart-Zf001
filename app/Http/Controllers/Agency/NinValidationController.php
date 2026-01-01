@@ -227,7 +227,7 @@ class NinValidationController extends Controller
             $apiKey = env('NIN_API_KEY');
             
             // Determine URL and Payload based on service type
-            if ($agentService->service_type == 'nin_validation') {
+            if (strtoupper($agentService->service_type) == 'NIN_VALIDATION') {
                 $url = 'https://s8v.ng/api/validation/status';
                 $payload = [
                     'nin' => $agentService->nin,
