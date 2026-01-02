@@ -155,6 +155,7 @@
                                         <th>#</th>
                                         <th>Reference</th>
                                         <th>Phone Number</th>
+                                        <th>BVN</th>
                                         <th>Status</th>
                                         <th>Action</th>
                                     </tr>
@@ -165,6 +166,7 @@
                                             <td>{{ $loop->iteration + $crmSubmissions->firstItem() - 1 }}</td>
                                             <td>{{ $submission->reference }}</td>
                                             <td>{{ $submission->number }}</td>
+                                            <td>{{ $submission->bvn ?? 'N/A' }}</td>
                                             <td>
                                                 <span class="badge bg-{{ match($submission->status) {
                                                     'resolved' => 'success',
