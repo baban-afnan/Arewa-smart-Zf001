@@ -3,8 +3,9 @@
 namespace App\Repositories;
 
 use App\Models\Verification;
-
+use Illuminate\Support\Facades\Log;
 use TCPDF;
+use TCPDF_FONTS;
 
 class NIN_PDF_Repository
 {
@@ -321,5 +322,79 @@ class NIN_PDF_Repository
                 "errors" => ["Not Found" => "Verification record not found!"]
             ], 422);
         }
+    }
+
+      public function individualSlip($agentService, $reference){
+        Log::info('Generating Individual TIN Slip PDF');
+        Log::info('Agent Service Data: ', (array)$agentService);
+
+        $modificationData = $agentService->modification_data;
+
+        $tinData = [
+            'nin' => $modificationData['nin'] ?? '',
+            'fName' => $modificationData['first_name'] ?? '',
+            'sName' => $modificationData['last_name'] ?? '',
+            'mName' => $modificationData['middle_name'] ?? '',
+            'dob' => $modificationData['date_of_birth'] ?? '',
+            'tax_id' => $modificationData['api_response']['tax_id'] ?? '',
+            'tax_residency' => $modificationData['api_response']['tax_residency'] ?? '',
+        ];
+
+        $names = html_entity_decode($tinData['fName']) . ' ' . html_entity_decode($tinData['sName']);
+
+        $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8');
+        $pdf->setPrintHeader(false);
+        $pdf->SetCreator('Abu');
+        $pdf->SetAuthor('Zulaiha');
+        $pdf->SetTitle($names);
+        $pdf->SetSubject('Individual TIN Slip');
+        $pdf->SetKeywords('individual tin slip, TCPDF, PHP');
+        $pdf->setImageScale(PDF_IMAGE_SCALE_RATIO);
+        $pdf->AddPage();
+        $pdf->SetFont('dejavuserifcondensedbi', '', 12);
+
+        $txt = "Please find below your new Individual TIN Slip...";
+        $pdf->MultiCell(150, 20, $txt, 0, 'C', false, 1, 35, 20, true, 0, false, true, 0, 'T', false);
+
+        $pdf->Image('assets/images/nrs_bg_front.png.png', 60, 30, 100, 100, 'PNG', '', '', false, 300, '', false, false, 0);
+        $pdf->Image('assets/images/nrs_bg_back.png', 61.5, 87, 97, 97, 'PNG', '', '', false, 300, '', false, false, 0);
+
+        $style = [
+            'border' => false,
+            'padding' => 0,
+            'fgcolor' => [0, 0, 0],
+            'bgcolor' => [255, 255, 255]
+        ];
+
+        $datas = '{TIN: ' . $tinData['tax_id'] . ', NAME: ' . html_entity_decode($tinData['fName']) . ' ' . html_entity_decode($tinData['mName']) . ' ' . html_entity_decode($tinData['sName']) . ', dob: ' . $tinData['dob'] . ', Status:Verified}';
+        $pdf->write2DBarcode($datas, 'QRCODE,H', 123.5, 67, 23, 18, $style, 'H');
+
+        $sur = html_entity_decode($tinData['sName']);
+        $pdf->SetFont('helvetica', '', 9);
+        $pdf->Text(76.5, 73.5, $sur);
+
+        $othername = html_entity_decode($tinData['fName']);
+        $pdf->SetFont('helvetica', '', 9);
+        $pdf->Text(76.6, 80, $othername);
+
+        $dob = $tinData['dob'];
+        $newD = strtotime($dob);
+        $cdate = date("d M Y", $newD);
+        $pdf->SetFont('helvetica', '', 8);
+        $pdf->Text(76.6, 87, $cdate);
+
+        $tin = $tinData['tax_id'];
+        $pdf->setTextColor(0, 0, 0);
+        $newTin = substr($tin, 0, 4) . " " . substr($tin, 4, 3) . " " . substr($tin, 7);
+        $pdf->SetFont('helvetica', '', 18);
+        $pdf->Text(85, 93, $newTin);
+
+        $filename = 'Individual TIN Slip - ' . $reference . '.pdf';
+        $pdfContent = $pdf->Output($filename, 'S');
+
+        return response($pdfContent, 200)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')
+            ->header('Content-Length', strlen($pdfContent));
     }
 }

@@ -6,219 +6,532 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use App\Models\AgentService;
 use App\Models\Service;
 use App\Models\ServiceField;
 use App\Models\Transaction;
 use App\Models\Wallet;
-use Illuminate\Support\Facades\Storage;
+use App\Repositories\NIN_PDF_Repository;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class TinRegistrationController extends Controller
 {
     public function index(Request $request)
     {
         $user = Auth::user();
-        $serviceKey = 'TIN'; // Assuming the service name in DB is 'TIN'
 
-        // Query submissions
-        $submissions = AgentService::with('transaction')
-            ->where('user_id', $user->id)
-            ->where('service_name', $serviceKey)
-            ->when($request->filled('search'), fn($q) =>
-                $q->where('reference', 'like', "%{$request->search}%")
-                  ->orWhere('field_name', 'like', "%{$request->search}%"))
-            ->orderByRaw("
-                CASE
-                    WHEN status = 'pending' THEN 1
-                    WHEN status = 'processing' THEN 2
-                    WHEN status = 'query' THEN 3
-                    WHEN status = 'successful' THEN 4
-                    ELSE 99
-                END
-            ")->orderByDesc('submission_date')
-            ->paginate(10)
-            ->withQueryString();
-
-        // Load active service and its fields
-        $service = Service::where('name', $serviceKey)
-            ->where('is_active', true)
-            ->with(['fields' => fn($q) => $q->where('is_active', true), 'prices'])
-            ->first();
-
+        // Ensure wallet exists
         $wallet = Wallet::firstOrCreate(
             ['user_id' => $user->id],
             ['balance' => 0.00, 'status' => 'active']
         );
 
-        $fields = $service?->fields ?? collect();
-        $prices = $service?->prices ?? collect();
+        $submissions = AgentService::with('transaction')
+            ->where('user_id', $user->id)
+            ->where('service_type', 'TIN REGISTRATION')
+            ->when($request->filled('search'), fn($q) =>
+                $q->where('reference', 'like', "%{$request->search}%")
+                  ->orWhere('field_name', 'like', "%{$request->search}%"))
+            ->orderByDesc('submission_date')
+            ->paginate(10)
+            ->withQueryString();
+
+        $service = Service::where('name', 'TIN REGISTRATION')
+            ->where('is_active', true)
+            ->first();
+
+        $fields = $service?->fields()->where('is_active', true)->get() ?? collect();
+
+        // Fetch prices for Download
+        // 614 = Individual/Standard
+        // 615 = Corporate/Premium
+        $individualField = ServiceField::where('field_code', 614)->first();
+        $corporateField  = ServiceField::where('field_code', 615)->first();
+
+        $individualPrice = $individualField ? $individualField->getPriceForUserType($user->role) : 0.00;
+        $corporatePrice  = $corporateField  ? $corporateField->getPriceForUserType($user->role) : 0.00;
+
+        $downloadPrices = [
+            'individual' => $individualPrice,
+            'corporate' => $corporatePrice,
+        ];
 
         return view('pages.dashboard.tin.index', [
             'fields'        => $fields,
             'service'       => $service,
             'submissions'   => $submissions,
-            'servicePrices' => $prices,
             'wallet'        => $wallet,
+            'downloadPrices'=> $downloadPrices,
         ]);
     }
 
-    public function store(Request $request)
+    /**
+     * Handle TIN validation with charging BEFORE API call
+     */
+    public function validateTin(Request $request)
     {
         $user = Auth::user();
-        $serviceKey = 'TIN';
 
-        // Validate Service Field ID first to determine requirements
         $request->validate([
-            'service_field_id' => 'required|exists:service_fields,id',
+            'type' => 'required|in:individual,corporate',
+            'field_code' => 'required|in:800,801',
         ]);
 
-        $serviceField = ServiceField::with(['service', 'prices'])->findOrFail($request->service_field_id);
-        $serviceName = $serviceField->service->name; // Should be 'TIN'
-        $fieldName = $serviceField->field_name; // e.g., 'Individual' or 'Corporate'
+        // Fetch service field
+        $serviceField = ServiceField::where('field_code', $request->field_code)
+            ->whereHas('service', function($q) {
+                $q->where('is_active', true);
+            })
+            ->with('service')
+            ->first();
 
-        // Determine if it's Individual or Corporate based on the field name
-        $isCorporate = stripos($fieldName, 'Corporate') !== false || stripos($fieldName, 'Organisation') !== false || stripos($fieldName, 'Company') !== false;
-
-        // Define Base Rules
-        $rules = [
-            'email' => 'required|email',
-            'phone_number' => 'required|string',
-            'state' => 'required|string',
-            'lga' => 'required|string',
-            'city' => 'required|string',
-            'house_number' => 'required|string',
-            'street_name' => 'required|string',
-            'nearest_bus_stop' => 'required|string',
-            'country' => 'required|string',
-        ];
-
-        if ($isCorporate) {
-            $rules = array_merge($rules, [
-                'company_name' => 'required|string',
-                'organization_type' => 'required|string',
-                'registration_number' => 'required|string',
-                // Require contact person details for corporate as well
-                'first_name' => 'required|string',
-                'last_name' => 'required|string',
-            ]);
-        } else {
-            // Individual Rules
-            $rules = array_merge($rules, [
-                'bvn' => 'required|string',
-                'first_name' => 'required|string',
-                'last_name' => 'required|string',
-                'middle_name' => 'nullable|string',
-                'nin' => 'required|string',
-                'date_of_birth' => 'required|date',
-                'marital_status' => 'required|string',
+        if (!$serviceField) {
+            return back()->with([
+                'status' => 'error',
+                'message' => "Service field not found."
             ]);
         }
 
-        $request->validate($rules);
+        $service = $serviceField->service;
 
-        // Determine price
-        $servicePrice = $serviceField->prices
-            ->where('user_type', $user->role)
-            ->first()?->price ?? $serviceField->base_price;
-
-        $totalAmount = $servicePrice;
+        // Get price based on user role
+        $servicePrice = $serviceField->getPriceForUserType($user->role);
 
         if ($servicePrice === null) {
-            return back()->with(['status' => 'error', 'message' => 'Service price not configured.'])->withInput();
+            return back()->with([
+                'status' => 'error',
+                'message' => 'Service price not configured for your user role.'
+            ]);
         }
 
+        // Wallet validation and charging
         $wallet = Wallet::where('user_id', $user->id)->firstOrFail();
 
         if ($wallet->status !== 'active') {
-            return back()->with(['status' => 'error', 'message' => 'Your wallet is not active.'])->withInput();
+            return back()->with([
+                'status' => 'error',
+                'message' => 'Your wallet is inactive. Please contact support.'
+            ])->withInput();
         }
 
-        if ($wallet->balance < $totalAmount) {
-            return back()->with(['status' => 'error', 'message' => 'Insufficient balance.'])->withInput();
+        if ($wallet->balance < $servicePrice) {
+            return back()->with([
+                'status' => 'error',
+                'message' => 'You do not have sufficient fund in your wallet. You need NGN ' .
+                    number_format($servicePrice - $wallet->balance, 2) . ' more.'
+            ])->withInput();
+        }
+
+        // Validate additional inputs based on type
+        if ($request->type === 'individual') {
+            $request->validate([
+                'nin' => 'required|digits:11',
+                'first_name' => 'required|string',
+                'last_name' => 'required|string',
+                'date_of_birth' => 'required|date',
+            ]);
+        } else {
+            $request->validate([
+                'rc_number' => 'required',
+                'org_type' => 'required',
+            ]);
         }
 
         DB::beginTransaction();
 
         try {
-            $reference = 'TIN' . date('ymd') . strtoupper(substr(uniqid(), -5));
+            // CHARGE USER BEFORE API CALL
+            $transactionRef = 'TIN' . date('is') . strtoupper(Str::random(5));
             $performedBy = trim($user->first_name . ' ' . $user->last_name);
 
-            $uploads = [];
-            // Uploads removed as per request
-
-
-            // Prepare Data for JSON field
-            $formData = $request->except([
-                '_token', 'passport_upload', 'cac_certificate'
-            ]);
-            $formData['uploads'] = $uploads;
-
-            // Create Transaction
+            // Create PENDING transaction
             $transaction = Transaction::create([
-                'transaction_ref' => $reference,
-                'user_id'         => $user->id,
-                'amount'          => $totalAmount,
-                'performed_by'    => $performedBy,
-                'description'     => "{$serviceName} Registration - {$fieldName}",
-                'type'            => 'debit',
-                'status'          => 'completed',
-                'metadata'        => [
-                    'service' => $serviceName,
-                    'field' => $fieldName,
-                    'details' => $formData
+                'transaction_ref' => $transactionRef,
+                'user_id' => $user->id,
+                'amount' => $servicePrice,
+                'description' => "TIN Validation - {$serviceField->field_name}",
+                'type' => 'debit',
+                'status' => 'pending',
+                'service_type' => 'TIN Individual',
+                'performed_by' => $performedBy,
+                'metadata' => [
+                    'service' => 'tin_validation',
+                    'service_name' => $service->name,
+                    'service_field' => $serviceField->field_name,
+                    'field_code' => $serviceField->field_code,
+                    'type' => $request->type,
+                    'input_data' => $request->except(['_token']),
                 ],
             ]);
 
-            // Create AgentService
-            AgentService::create([
-                'reference'       => $reference,
-                'user_id'         => $user->id,
-                'service_id'      => $serviceField->service_id,
-                'service_field_id'=> $serviceField->id,
-                'field_code'      => $serviceField->field_code,
-                'service_name'    => $serviceName,
-                'field_name'      => $fieldName,
-                'amount'          => $totalAmount,
-                'performed_by'    => $performedBy,
-                'transaction_id'  => $transaction->id,
+            // Create PENDING agent service record
+            $agentService = AgentService::create([
+                'reference' => $transactionRef,
+                'user_id' => $user->id,
+                'service_field_id' => $serviceField->id,
+                'service_id' => $service->id,
+                'field_code' => $serviceField->field_code,
+                'field_name' => $serviceField->field_name,
+                'amount' => $servicePrice,
+                'service_name' => $service->name,
+                'description' => "TIN Validation - {$request->type}",
+                'modification_data' => $request->all(),
+                'transaction_id' => $transaction->id,
+                'performed_by' => $performedBy,
                 'submission_date' => now(),
-                'status'          => 'pending',
-                'service_type'    => $isCorporate ? 'TIN COOPERATE' : 'TIN INDIVIDUAL',
-                'field'           => json_encode($formData),
-                'first_name'      => $request->first_name,
-                'last_name'       => $request->last_name,
-                'middle_name'     => $request->middle_name,
-                'date_of_birth'             => $request->date_of_birth,
-                'company_name'    => $request->company_name ?? null,
-                'email'           => $request->email,
-                'bvn'           => $request->bvn,
-                'nin'           => $request->nin,
-                'country'           => $request->nigeria,
-                'company_name'           => $request->counmarital_status,
-                'gender'           => $request->gender,
-                'phone_number'    => $request->phone_number,
-                'number'          => $request->phone_number,
-                'state'           => $request->state,
-                'lga'             => $request->lga,
-                'city'            => $request->city,
-                'street_name'     => $request->street_name,
-                'house_number'    => $request->house_number,
-                'passport_url'    => $uploads['passport'] ?? null,
-                'cac_certificate_url' => $uploads['cac_certificate'] ?? null,
+                'status' => 'pending',
+                'service_type' => 'TIN Individual',
             ]);
 
-            $wallet->decrement('balance', $totalAmount);
+            // Deduct from wallet immediately
+            $wallet->decrement('balance', $servicePrice);
 
-            DB::commit();
+            // Prepare API payload
+            $apiKey = 'RTERSwIscARdIERIspENsAnTROcLEgrA';
+            $url = 'https://live.ninauth.nimc.gov.ng/v1/resolve';
+            $payload = [];
 
-            return redirect()->route('cac.tin')->with([
-                'status' => 'success',
-                'message' => 'TIN Registration submitted successfully. Reference: ' . $reference
+            if ($request->type === 'individual') {
+                $payload = [
+                    'nin' => $request->nin,
+                    'firstName' => $request->first_name,
+                    'lastName' => $request->last_name,
+                    'dateOfBirth' => date('d/m/Y', strtotime($request->date_of_birth)),
+                ];
+            } else {
+                $payload = [
+                    'type' => $request->org_type,
+                    'rc' => $request->rc_number,
+                ];
+            }
+
+            // Make API call
+            $response = Http::withHeaders([
+                'x-api-key' => $apiKey,
+            ])->timeout(30)->post($url, $payload);
+
+            Log::info('TIN Validation API Request', [
+                'user_id' => $user->id,
+                'reference' => $transactionRef,
+                'payload' => $payload,
             ]);
+
+            if ($response->successful() && $response->json('success')) {
+                $responseData = $response->json('data');
+
+                // Update transaction and agent service to SUCCESS
+                $transaction->update([
+                    'status' => 'completed',
+                    'metadata' => array_merge($transaction->metadata, [
+                        'api_response' => $responseData,
+                        'api_status' => 'success',
+                    ])
+                ]);
+
+                $agentService->update([
+                    'status' => 'successful',
+                    'modification_data' => array_merge($agentService->modification_data, [
+                        'api_response' => $responseData,
+                        'tin' => $responseData['tin'] ?? $responseData['taxIdentificationNumber'] ?? null,
+                    ])
+                ]);
+
+                DB::commit();
+
+                // Store verification data in session for PDF download
+                session()->flash('verification', [
+                    'success' => true,
+                    'data' => $responseData,
+                    'type' => $request->type,
+                    'field_code' => $request->field_code,
+                    'input_data' => $request->all(),
+                    'transaction_ref' => $transactionRef,
+                    'tin_number' => $responseData['tin'] ?? $responseData['taxIdentificationNumber'] ?? null,
+                ]);
+
+                return redirect()->back()->with([
+                    'status' => 'success',
+                    'message' => 'TIN validation successful! You can now download your slip.',
+                ]);
+
+            } else {
+                // API failed - REFUND USER
+                $wallet->increment('balance', $servicePrice);
+
+                $errorMessage = $response->json('message') ?? 'API validation failed';
+
+                $transaction->update([
+                    'status' => 'failed',
+                    'metadata' => array_merge($transaction->metadata, [
+                        'api_response' => $response->json(),
+                        'api_status' => 'failed',
+                        'error' => $errorMessage,
+                    ])
+                ]);
+
+                $agentService->update([
+                    'status' => 'failed',
+                    'modification_data' => array_merge($agentService->modification_data, [
+                        'api_error' => $errorMessage,
+                    ])
+                ]);
+
+                DB::commit();
+
+                return back()->with([
+                    'status' => 'error',
+                    'message' => 'Validation failed: ' . $errorMessage . '. Your wallet has been refunded.',
+                ]);
+            }
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with(['status' => 'error', 'message' => 'Error: ' . $e->getMessage()])->withInput();
+
+            // Refund if wallet was debited but error occurred
+            if (isset($wallet) && isset($servicePrice) && !isset($response)) {
+                $wallet->increment('balance', $servicePrice);
+            }
+
+            return back()->with([
+                'status' => 'error',
+                'message' => 'System error: ' . $e->getMessage() . '. Please try again or contact support.',
+            ])->withInput();
         }
+    }
+
+    /**
+     * Download TIN slip (Charged Service)
+     */
+    public function downloadSlip(Request $request)
+    {
+        $user = Auth::user();
+
+        $request->validate([
+            'transaction_ref' => 'required|string',
+            'type'            => 'required|in:individual,corporate'
+        ]);
+
+        $reference = $request->transaction_ref;
+        $type = $request->type;
+        
+        // Determine Service Field Code based on Type
+        // Individual = 614, Corporate = 615
+        $fieldCode = ($type === 'individual') ? 614 : 615;
+
+        // 1. Retrieve the validated service record
+        $agentService = AgentService::where('reference', $reference)
+            ->where('user_id', $user->id)
+            ->where('status', 'successful')
+            ->first();
+
+        if (!$agentService) {
+            return back()->with([
+                'status' => 'error',
+                'message' => 'Validation record not found or invalid.'
+            ]);
+        }
+
+        // 2. Fetch Service Price for Download
+        $serviceField = ServiceField::where('field_code', $fieldCode)
+            ->whereHas('service', function($q) {
+                $q->where('is_active', true);
+            })
+            ->with('service')
+            ->first();
+
+        if (!$serviceField) {
+            return back()->with([
+                'status' => 'error',
+                'message' => "Download service (Code: $fieldCode) not available."
+            ]);
+        }
+
+        $price = $serviceField->getPriceForUserType($user->role);
+
+        if ($price === null) {
+            return back()->with([
+                'status' => 'error',
+                'message' => 'Download price not configured for your role.'
+            ]);
+        }
+
+        // 3. Wallet Check & Charge
+        $wallet = Wallet::where('user_id', $user->id)->firstOrFail();
+
+        if ($wallet->balance < $price) {
+            return back()->with([
+                'status' => 'error',
+                'message' => 'Insufficient funds. You need NGN ' . number_format($price - $wallet->balance, 2) . ' more to download.'
+            ]);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $transactionRef = 'TINDL' . date('is') . strtoupper(Str::random(5));
+            $performedBy = trim($user->first_name . ' ' . $user->last_name);
+
+            // Create Debit Transaction
+            Transaction::create([
+                'transaction_ref' => $transactionRef,
+                'user_id' => $user->id,
+                'amount' => $price,
+                'description' => "TIN Download - {$type}",
+                'type' => 'debit',
+                'status' => 'completed', // Instant charge
+                'service_type' => 'TIN Download',
+                'performed_by' => $performedBy,
+                'metadata' => [
+                    'related_ref' => $reference,
+                    'type' => $type,
+                    'field_code' => $fieldCode
+                ],
+            ]);
+
+            // Deduct Wallet
+            $wallet->decrement('balance', $price);
+
+            DB::commit();
+
+            // 4. Generate PDF
+            if ($type === 'individual') {
+                $repObj = new NIN_PDF_Repository;
+                return $repObj->individualSlip($agentService, $reference);
+            } else {
+                // Corporate Certificate
+                $data = $agentService->modification_data;
+                $apiResponse = $data['api_response'] ?? [];
+                
+                $enrollmentInfo = new \stdClass();
+                $enrollmentInfo->last_name = $apiResponse['company_name'] ?? $apiResponse['business_name'] ?? 'N/A';
+                $enrollmentInfo->first_name = '';
+                $enrollmentInfo->middle_name = '';
+                $enrollmentInfo->nin = $apiResponse['tax_id'] ?? $apiResponse['tin'] ?? $apiResponse['jtb_tin'] ?? 'N/A';
+                
+                $address = $apiResponse['office_address'] ?? $apiResponse['address'] ?? 'N/A';
+                $enrollmentInfo->street_name = $address;
+                $enrollmentInfo->lga = $apiResponse['lga'] ?? '';
+                $enrollmentInfo->state = $apiResponse['state'] ?? '';
+
+                $qrContent = json_encode([
+                    'Type' => 'Corporate TIN',
+                    'Name' => $enrollmentInfo->last_name,
+                    'TIN' => $enrollmentInfo->nin,
+                    'RC' => $apiResponse['rc'] ?? $apiResponse['rc_number'] ?? 'N/A',
+                    'Date' => now()->format('Y-m-d')
+                ]);
+                
+                $qrcode = QrCode::format('svg')->size(200)->generate($qrContent);
+
+                $pdf = Pdf::loadView('pages.dashboard.tin.pdf.corporate', [
+                    'enrollmentInfo' => $enrollmentInfo,
+                    'qrcode' => $qrcode
+                ])->setPaper('a4', 'landscape');
+
+                return $pdf->download('TIN_Certificate_' . $reference . '.pdf');
+            }
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('TIN Download Logic Error', ['error' => $e->getMessage()]);
+
+            return back()->with([
+                'status' => 'error',
+                'message' => 'System error during charge process. Please try again.'
+            ]);
+        }
+    }
+
+    /**
+     * AJAX endpoint to get field price
+     */
+    public function getFieldPrice(Request $request)
+    {
+        $request->validate([
+            'field_code' => 'required|exists:service_fields,field_code',
+        ]);
+
+        $user = Auth::user();
+        $field = ServiceField::where('field_code', $request->field_code)
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $price = $field->getPriceForUserType($user->role);
+
+        if ($price === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Price not configured for your role'
+            ], 400);
+        }
+
+        return response()->json([
+            'success' => true,
+            'price' => $price,
+            'formatted_price' => 'NGN ' . number_format($price, 2),
+            'field_name' => $field->field_name,
+            'field_code' => $field->field_code,
+        ]);
+    }
+
+    /**
+     * Check wallet balance before validation
+     */
+    public function checkBalance(Request $request)
+    {
+        $request->validate([
+            'field_code' => 'required|exists:service_fields,field_code',
+        ]);
+
+        $user = Auth::user();
+        $field = ServiceField::where('field_code', $request->field_code)
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $price = $field->getPriceForUserType($user->role);
+
+        if ($price === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Price not configured'
+            ], 400);
+        }
+
+        $wallet = Wallet::where('user_id', $user->id)->firstOrFail();
+
+        $hasSufficientFunds = $wallet->balance >= $price;
+        $shortfall = $price - $wallet->balance;
+
+        return response()->json([
+            'success' => true,
+            'has_sufficient_funds' => $hasSufficientFunds,
+            'required_amount' => $price,
+            'current_balance' => $wallet->balance,
+            'shortfall' => max(0, $shortfall),
+            'message' => $hasSufficientFunds
+                ? 'Sufficient funds available'
+                : 'Insufficient funds. You need NGN ' . number_format($shortfall, 2) . ' more.',
+        ]);
+    }
+
+    /**
+     * Clean API response
+     */
+    private function cleanApiResponse($response): string
+    {
+        if (is_array($response)) {
+            $jsonString = json_encode($response, JSON_PRETTY_PRINT);
+        } else {
+            $jsonString = (string) $response;
+        }
+
+        $cleanResponse = str_replace(['{', '}', '"', "'"], '', $jsonString);
+        $cleanResponse = preg_replace('/\s+/', ' ', $cleanResponse);
+
+        return trim($cleanResponse);
     }
 }

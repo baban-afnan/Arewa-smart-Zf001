@@ -173,7 +173,8 @@ Route::middleware(['auth'])->group(function () {
         |--------------------------------------------------------------------------
         */
         Route::get('/tin-reg', [App\Http\Controllers\Agency\TinRegistrationController::class, 'index'])->name('cac.tin');
-        Route::post('/tin-reg', [App\Http\Controllers\Agency\TinRegistrationController::class, 'store'])->name('tin.store');
+        Route::post('/tin-reg/validate', [App\Http\Controllers\Agency\TinRegistrationController::class, 'validateTin'])->name('tin.validate');
+        Route::post('/tin-reg/download', [App\Http\Controllers\Agency\TinRegistrationController::class, 'downloadSlip'])->name('tin.download');
 
         Route::prefix('bvn')->group(function () {
 
